@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Racer</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            color: white;
+            font-family: 'Comic Sans MS', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 600px;
+            background-color: #333;
+            border: 4px solid #00ffff;
+            border-radius: 10px;
+            box-shadow: 0px 0px 20px #00ffff;
+            overflow: hidden;
+        }
+
+        /* Front Page Styles */
+        #front-page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        h1 {
+            color: #ff007f;
+            text-shadow: 2px 2px 10px #ff007f;
+            font-size: 45px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        h3 {
+            color: #00ffff;
+            text-shadow: 1px 1px 5px #00ffff;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+
+        .discord-text {
+            color: #00ffff;
+            font-size: 16px;
+            margin-bottom: 40px;
+            background: rgba(0, 255, 255, 0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            border: 1px solid #00ffff;
+        }
+
+        button {
+            background-color: #00ffff;
+            color: #1a1a2e;
+            border: none;
+            padding: 15px 40px;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0px 5px 0px #008888;
+            transition: 0.1s;
+        }
+
+        button:active {
+            transform: translateY(5px);
+            box-shadow: 0px 0px 0px #008888;
+        }
+
+        /* Game Screen Styles */
+        canvas {
+            display: none;
+        }
+
+        #score-board {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 4px #000;
+            z-index: 5;
+            display: none;
+        }
+
+        #controls-info {
+            position: absolute;
+            top: 40px;
+            left: 10px;
+            font-size: 14px;
+            color: #00ffff;
+            z-index: 5;
+            display: none;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ff007f;
+            text-align: center;
+            display: none;
+            z-index: 6;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Game Music -->
+    <audio id="bg-music" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="game-container">
+        <!-- Front Page -->
+        <div id="front-page">
+            <h1>NEON RACER</h1>
+            <h3>Made by Ahmad bin shifa</h3>
+            <div class="discord-text">Discord: abs_org</div>
+            <button onclick="startGame()">PLAY NOW</button>
+        </div>
+
+        <!-- Score, Controls & Canvas -->
+        <div id="score-board">Score: <span id="score">0</span></div>
+        <div id="controls-info">Steer: Arrows &nbsp;|&nbsp; Brake: Down Arrow</div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+        <!-- Game Over Screen -->
+        <div id="game-over">
+            <h2 style="color: #ff007f; font-size: 30px; margin-top: 0;">CRASHED!</h2>
+            <p id="race-result" style="color: yellow; font-size: 18px;"></p>
+            <button onclick="restartGame()" style="font-size: 18px; padding: 10px 20px;">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const frontPage = document.getElementById("front-page");
+        const scoreBoard = document.getElementById("score-board");
+        const controlsInfo = document.getElementById("controls-info");
+        const scoreElement = document.getElementById("score");
+        const gameOverScreen = document.getElementById("game-over");
+        const raceResultText = document.getElementById("race-result");
+        const bgMusic = document.getElementById("bg-music");
+
+        let animationId;
+        let score = 0;
+        let gameActive = false;
+        let baseSpeed = 5;
+        let isBraking = false; 
+
+        // Player Car Object (Pink)
+        const player = {
+            x: 100,
+            y: 480,
+            width: 50,
+            height: 90,
+            color: "#ff007f",
+            speed: 6,
+            dx: 0
+        };
+
+        // CPU Rival Car Object (Yellow)
+        const cpu = {
+            x: 250,
+            y: 480,
+            width: 50,
+            height: 90,
+            color: "#ffcc00",
+            speed: 4 
+        };
+
+        let roadLines = [];
+        let enemies = [];
+
+        // Setup Keyboard Controls
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") player.dx = -player.speed;
+            if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") player.dx = player.speed;
+            if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") isBraking = true;
+        });
+
+        document.addEventListener("keyup", (e) => {
+            if (e.key === "ArrowLeft" || e.key === "a" || e.key === "ArrowRight" || e.key === "d" || e.key === "A" || e.key === "D") {
+                player.dx = 0;
+            }
+            if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") isBraking = false;
+        });
+
+        function startGame() {
+            frontPage.style.display = "none";
+            canvas.style.display = "block";
+            scoreBoard.style.display = "block";
+            controlsInfo.style.display = "block";
+            
+            bgMusic.volume = 0.5;
+            bgMusic.play();
+
+            resetVariables();
+            update();
+        }
+
+        function restartGame() {
+            gameOverScreen.style.display = "none";
+            resetVariables();
+            update();
+        }
+
+        function resetVariables() {
+            player.x = 100;
+            player.y = 480;
+            cpu.x = 250;
+            cpu.y = 480;
+            score = 0;
+            baseSpeed = 5;
+            isBraking = false;
+            enemies = [];
+            roadLines = [0, 150, 300, 450, 600];
+            gameActive = true;
+            scoreElement.innerText = score;
+        }
+
+        function spawnEnemy() {
+            if (Math.random() < 0.025) { 
+                let randomX = Math.floor(Math.random() * (canvas.width - 110)) + 30;
+                enemies.push({
+                    x: randomX,
+                    y: -100,
+                    width: 50,
+                    height: 90,
+                    color: "#00ffff"
+                });
+            }
+        }
+
+        function drawCar(car, isBrakingCheck = false) {
+            ctx.fillStyle = car.color;
+            ctx.fillRect(car.x, car.y, car.width, car.height);
+            
+            // Windows
+            ctx.fillStyle = "#111";
+            ctx.fillRect(car.x + 10, car.y + 15, car.width - 20, 20); 
+            ctx.fillRect(car.x + 10, car.y + 60, car.width - 20, 15); 
+
+            // Brake Lights
+            if (isBrakingCheck) {
+                ctx.fillStyle = "#ff0000"; 
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "red";
+                ctx.fillRect(car.x + 5, car.y + 85, 12, 8); 
+                ctx.fillRect(car.x + 33, car.y + 85, 12, 8); 
+                ctx.shadowBlur = 0; 
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = "#2E7D32"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#555";
+            ctx.fillRect(30, 0, canvas.width - 60, canvas.height);
+
+            ctx.fillStyle = "white";
+            for (let i = 0; i < roadLines.length; i++) {
+                ctx.fillRect(canvas.width / 2 - 5, roadLines[i], 10, 80);
+            }
+
+            drawCar(player, isBraking);
+            drawCar(cpu, false); 
+
+            for (let i = 0; i < enemies.length; i++) {
+                drawCar(enemies[i]);
+            }
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            let currentSpeed = isBraking ? baseSpeed / 2 : baseSpeed;
+
+            player.x += player.dx;
+            if (player.x < 30) player.x = 30;
+            if (player.x + player.width > canvas.width - 30) player.x = canvas.width - 30 - player.width;
+
+            let cpuTargetX = cpu.x;
+            let danger = false;
+
+            for (let i = 0; i < enemies.length; i++) {
+                let enemy = enemies[i];
+                if (enemy.y < cpu.y && enemy.y > cpu.y - 250) {
+                    if (Math.abs(enemy.x - cpu.x) < 55) {
+                        danger = true;
+                        if (enemy.x > canvas.width / 2) {
+                            cpuTargetX = 50; 
+                        } else {
+                            cpuTargetX = canvas.width - 50 - cpu.width; 
+                        }
+                    }
+                }
+            }
+
+            if (!danger) {
+                cpuTargetX = canvas.width / 2 + 30;
+            }
+
+            if (cpu.x < cpuTargetX - 5) cpu.x += cpu.speed;
+            if (cpu.x > cpuTargetX + 5) cpu.x -= cpu.speed;
+            
+            if (cpu.x < 30) cpu.x = 30;
+            if (cpu.x + cpu.width > canvas.width - 30) cpu.x = canvas.width - 30 - cpu.width;
+
+            if (isBraking) {
+                cpu.y -= 2; 
+            } else {
+                if (cpu.y > 400) cpu.y -= 1; 
+            }
+            if (cpu.y > 600) cpu.y = 500; 
+
+            for (let i = 0; i < roadLines.length; i++) {
+                roadLines[i] += currentSpeed;
+                if (roadLines[i] > canvas.height) {
+                    roadLines[i] = -100;
+                }
+            }
+
+            for (let i = 0; i < enemies.length; i++) {
+                let enemy = enemies[i];
+                let enemySpeed = currentSpeed - 1;
+                if (enemySpeed < 1) enemySpeed = 1;
+                enemy.y += enemySpeed; 
+
+                if (
+                    player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y
+                ) {
+                    gameActive = false;
+                    
+                    if (player.y < cpu.y) {
+                        raceResultText.innerText = "You crashed, but you were beating the CPU!";
+                    } else {
+                        raceResultText.innerText = "The CPU won the race!";
+                    }
+                    
+                    gameOverScreen.style.display = "block";
+                }
+
+                if (
+                    cpu.x < enemy.x + enemy.width &&
+                    cpu.x + cpu.width > enemy.x &&
+                    cpu.y < enemy.y + enemy.height &&
+                    cpu.y + cpu.height > enemy.y
+                ) {
+                    cpu.y += 10; 
+                }
+
+                if (enemy.y > canvas.height && !enemy.passed) {
+                    score += 10;
+                    scoreElement.innerText = score;
+                    enemy.passed = true;
+                    if (score % 50 === 0) baseSpeed += 0.5; 
+                }
+            }
+
+            enemies = enemies.filter(enemy => enemy.y < canvas.height + 100);
+
+            spawnEnemy();
+            draw();
+
+            animationId = requestAnimationFrame(update);
+        }
+    </script>
+</body>
+</html>
